@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h4>Admin Dashboard</h4>
+  <div>
+    <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-secondary">Logout</a>
+  </div>
+</div>
+
+<form class="row g-2 mb-3">
+  <div class="col-auto">
+    <input name="q" value="{{ q }}" class="form-control" placeholder="Search by name / id type / description">
+  </div>
+  <div class="col-auto">
+    <select name="status" class="form-select">
+      <option value="all" {% if filter_status=='all' %}selected{% endif %}>All</option>
+      <option value="Pending" {% if filter_status=='Pending' %}selected{% endif %}>Pending</option>
+      <option value="Verified" {% if filter_status=='Verified' %}selected{% endif %}>Verified</option>
+      <option value="Returned" {% if filter_status=='Returned' %}selected{% endif %}>Returned</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary">Filter</button>
+  </div>
+</form>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Type</th>
+      <th>Name</th>
+      <th>ID Type</th>
+      <th>Status</th>
+      <th>Submitted</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in reports %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.report_type }}</td>
+        <td>{{ r.person_name }}</td>
+        <td>{{ r.id_type }}</td>
+        <td>{{ r.status }}</td>
+        <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          <a href="{{ url_for('view_report', report_id=r.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center">No reports found.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

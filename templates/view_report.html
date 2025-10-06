@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <a class="btn btn-link mb-3" href="{{ url_for('admin_dashboard') }}">← Back to dashboard</a>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">{{ report.report_type }} — {{ report.person_name }}</h5>
+        <p><strong>ID Type:</strong> {{ report.id_type }}</p>
+        <p><strong>Description:</strong> {{ report.description or '—' }}</p>
+        <p><strong>Contact:</strong> {{ report.contact_info or '—' }}</p>
+        <p><strong>Status:</strong> {{ report.status }}</p>
+        <p><strong>Submitted:</strong> {{ report.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+        {% if report.image_filename %}
+          <p><img src="{{ url_for('uploaded_file', filename=report.image_filename) }}" class="img-fluid" alt="id image"></p>
+        {% endif %}
+      </div>
+      <div class="card-footer">
+        <form method="post" action="{{ url_for('report_action', report_id=report.id) }}" class="d-inline">
+          <input type="hidden" name="action" value="verify">
+          <button class="btn btn-success btn-sm">Mark Verified</button>
+        </form>
+
+        <form method="post" action="{{ url_for('report_action', report_id=report.id) }}" class="d-inline ms-1">
+          <input type="hidden" name="action" value="return">
+          <button class="btn btn-primary btn-sm">Mark Returned</button>
+        </form>
+
+        <form method="post" action="{{ url_for('report_action', report_id=report.id) }}" class="d-inline ms-1">
+          <input type="hidden" name="action" value="pending">
+          <button class="btn btn-outline-secondary btn-sm">Set Pending</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

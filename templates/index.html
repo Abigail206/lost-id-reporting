@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <h3 class="mb-3">Report Lost or Found ID</h3>
+
+    <form action="{{ url_for('report') }}" method="post" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label">Type</label>
+        <select name="report_type" class="form-select" required>
+          <option value="Lost">Lost</option>
+          <option value="Found">Found</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Name on ID / Reporter Name</label>
+        <input type="text" name="person_name" class="form-control" placeholder="Name on ID or your name" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">ID Type</label>
+        <input type="text" name="id_type" class="form-control" placeholder="Student, Staff, Visitor..." required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Description</label>
+        <textarea name="description" class="form-control" rows="3" placeholder="Any additional info"></textarea>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Contact Info</label>
+        <input type="text" name="contact_info" class="form-control" placeholder="Phone, email, or other">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Photo of ID (optional)</label>
+        <input type="file" name="image" class="form-control" accept="image/*">
+        <small class="text-muted">Max 5 MB. Allowed: png, jpg, jpeg, gif</small>
+      </div>
+
+      <button class="btn btn-primary">Submit Report</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

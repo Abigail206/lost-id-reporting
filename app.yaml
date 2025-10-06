@@ -1,0 +1,9 @@
+runtime: python311
+
+instance_class: F2
+
+env_variables:
+  FLASK_ENV: "production"
+
+# optional handlers (static files automatically served by Flask)
+# no manual handlers required for simple apps

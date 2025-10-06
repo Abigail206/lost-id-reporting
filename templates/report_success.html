@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card">
+      <div class="card-body">
+        <h4 class="card-title">Report Submitted</h4>
+        <p class="card-text">Thank you — your report has been recorded.</p>
+
+        <ul class="list-group mb-3">
+          <li class="list-group-item"><strong>Type:</strong> {{ report.report_type }}</li>
+          <li class="list-group-item"><strong>Name:</strong> {{ report.person_name }}</li>
+          <li class="list-group-item"><strong>ID Type:</strong> {{ report.id_type }}</li>
+          <li class="list-group-item"><strong>Status:</strong> {{ report.status }}</li>
+          {% if report.contact_info %}
+            <li class="list-group-item"><strong>Contact:</strong> {{ report.contact_info }}</li>
+          {% endif %}
+        </ul>
+
+        {% if report.image_filename %}
+          <p><img src="{{ url_for('uploaded_file', filename=report.image_filename) }}" class="img-fluid" alt="uploaded image"></p>
+        {% endif %}
+
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Submit another</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -2,35 +2,46 @@ import os
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
+from google.cloud import storage
+from functools import wraps
 
-# ---------- Config ----------
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# ---------------- GCS CONFIG ----------------
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'lost-id-recovery-uploads')
+storage_client = storage.Client()
+bucket = storage_client.bucket(BUCKET_NAME)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+def upload_to_gcs(file, filename):
+    blob = bucket.blob(filename)
+    blob.upload_from_file(file)
+    blob.make_public()
+    return blob.public_url
 
+# ---------------- FLASK APP CONFIG ----------------
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'change_this_secret_in_production_please'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(BASE_DIR, 'database.db')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change_this_secret_in_production_please')
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@/{os.getenv('DB_NAME')}"
+    f"?unix_socket=/cloudsql/{os.getenv('CLOUD_SQL_CONNECTION_NAME')}"
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5 MB limit
 
 db = SQLAlchemy(app)
 
-# ---------- Models ----------
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+# ---------------- DATABASE MODELS ----------------
 class Report(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    report_type = db.Column(db.String(10), nullable=False)  # Lost or Found
+    report_type = db.Column(db.String(10), nullable=False)
     person_name = db.Column(db.String(200), nullable=False)
-    id_type = db.Column(db.String(200), nullable=False)     # Student/Staff or other
+    id_type = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    image_filename = db.Column(db.String(300), nullable=True)
+    image_filename = db.Column(db.String(500), nullable=True)
     contact_info = db.Column(db.String(300), nullable=True)
-    status = db.Column(db.String(50), default='Pending')   # Pending, Verified, Returned
+    status = db.Column(db.String(50), default='Pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Admin(db.Model):
@@ -44,8 +55,7 @@ class Admin(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-
-# ---------- Helpers ----------
+# ---------------- HELPERS ----------------
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -58,20 +68,28 @@ def create_admin_if_not_exists():
         db.session.commit()
         print("Created default admin -> username: admin, password: Passw0rd!")
 
+def admin_login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'admin_id' not in session:
+            return redirect(url_for('admin_login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated
 
-# ---------- Routes ----------
+# ---------------- INITIALIZE DB ----------------
 @app.before_first_request
 def init_db():
     db.create_all()
     create_admin_if_not_exists()
 
+# ---------------- ROUTES ----------------
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/report', methods=['POST'])
 def report():
-    report_type = request.form.get('report_type')  # Lost or Found
+    report_type = request.form.get('report_type')
     person_name = request.form.get('person_name')
     id_type = request.form.get('id_type')
     description = request.form.get('description')
@@ -81,13 +99,12 @@ def report():
         flash('Please fill required fields (Name, ID Type, Lost/Found).', 'danger')
         return redirect(url_for('index'))
 
-    # Handle file upload
     file = request.files.get('image')
-    filename = None
+    file_url = None
     if file and file.filename != '':
         if allowed_file(file.filename):
             filename = secure_filename(f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{file.filename}")
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            file_url = upload_to_gcs(file, filename)
         else:
             flash('Invalid file type. Allowed: png, jpg, jpeg, gif', 'danger')
             return redirect(url_for('index'))
@@ -97,7 +114,7 @@ def report():
         person_name=person_name,
         id_type=id_type,
         description=description,
-        image_filename=filename,
+        image_filename=file_url,
         contact_info=contact_info,
         status='Pending'
     )
@@ -105,21 +122,7 @@ def report():
     db.session.commit()
     return render_template('report_success.html', report=new_report)
 
-# Serve uploaded files (Flask will serve from static by default; this route is convenience)
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# --- Admin auth ---
-def admin_login_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'admin_id' not in session:
-            return redirect(url_for('admin_login', next=request.url))
-        return f(*args, **kwargs)
-    return decorated
-
+# ---------------- ADMIN ROUTES ----------------
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
@@ -151,7 +154,9 @@ def admin_dashboard():
     query = Report.query.order_by(Report.created_at.desc())
     if q:
         likeq = f"%{q}%"
-        query = query.filter((Report.person_name.like(likeq)) | (Report.description.like(likeq)) | (Report.id_type.like(likeq)))
+        query = query.filter((Report.person_name.like(likeq)) |
+                             (Report.description.like(likeq)) |
+                             (Report.id_type.like(likeq)))
     if filter_status != 'all':
         query = query.filter_by(status=filter_status)
     reports = query.all()
@@ -166,7 +171,7 @@ def view_report(report_id):
 @app.route('/admin/report/<int:report_id>/action', methods=['POST'])
 @admin_login_required
 def report_action(report_id):
-    action = request.form.get('action')  # verify, return, pending
+    action = request.form.get('action')
     report = Report.query.get_or_404(report_id)
     if action == 'verify':
         report.status = 'Verified'
@@ -182,17 +187,14 @@ def report_action(report_id):
     db.session.commit()
     return redirect(url_for('admin_dashboard'))
 
-# Simple contact page (optional)
 @app.route('/about')
 def about():
     return render_template('base.html', body="This is a small Lost ID Recovery system demo.")
 
-# ---------- Error handlers ----------
 @app.errorhandler(413)
 def request_entity_too_large(error):
     flash('File too large. Max 5 MB allowed.', 'danger')
     return redirect(request.referrer or url_for('index'))
 
-# ---------- Run ----------
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)

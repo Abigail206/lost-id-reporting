@@ -1,9 +1,24 @@
 runtime: python311
-
 instance_class: F2
 
 env_variables:
   FLASK_ENV: "production"
+  SECRET_KEY: "your_production_secret_here"
+  CLOUD_SQL_CONNECTION_NAME: "macro-shadow-474309-u9:us-central1:root"
+  DB_USER: "root"
+  DB_PASSWORD: "MyStrongPass123!"
+  DB_NAME: "lost_id_recovery"
+  BUCKET_NAME: "lost-id-recovery-uploads"
 
-# optional handlers (static files automatically served by Flask)
-# no manual handlers required for simple apps
+automatic_scaling:
+  min_instances: 1
+  max_instances: 3
+
+entrypoint: gunicorn -b :$PORT app:app
+
+handlers:
+  - url: /static
+    static_dir: static
+
+  - url: /.*
+    script: auto
